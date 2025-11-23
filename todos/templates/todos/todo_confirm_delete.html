@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Delete Todo</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        a {
+            margin-left: 10px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Delete Todo?</h1>
+    <p>Are you sure you want to delete "{{ object.title }}"?</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">Confirm Delete</button>
+        <a href="{% url 'todo_list' %}">Cancel</a>
+    </form>
+</body>
+
+</html>

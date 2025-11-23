@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Todo List</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .todo-item { border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .resolved { text-decoration: line-through; color: #888; }
+        .actions a { margin-left: 10px; text-decoration: none; color: #007bff; }
+        .btn { display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>My Todos</h1>
+    <a href="{% url 'todo_create' %}" class="btn">Add New Todo</a>
+    
+    {% for todo in todos %}
+        <div class="todo-item">
+            <div>
+                <h3 class="{% if todo.is_resolved %}resolved{% endif %}">
+                    <a href="{% url 'todo_toggle' todo.pk %}" style="text-decoration: none; color: inherit;">
+                        {% if todo.is_resolved %}☑{% else %}☐{% endif %}
+                    </a>
+                    {{ todo.title }}
+                </h3>
+                {% if todo.description %}<p>{{ todo.description }}</p>{% endif %}
+                {% if todo.due_date %}<small>Due: {{ todo.due_date|date:"M d, Y" }}</small>{% endif %}
+            </div>
+            <div class="actions">
+                <a href="{% url 'todo_update' todo.pk %}">Edit</a>
+                <a href="{% url 'todo_delete' todo.pk %}" style="color: red;">Delete</a>
+            </div>
+        </div>
+    {% empty %}
+        <p>No todos yet. Create one!</p>
+    {% endfor %}
+</body>
+</html>
