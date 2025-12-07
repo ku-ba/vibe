@@ -48,6 +48,127 @@ func generateID() string {
 	return hex.EncodeToString(bytes)
 }
 
+func handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/" {
+		http.ServeFile(w, r, "./static/index.html")
+		return
+	}
+	// Handle /interview/{id}
+	if strings.HasPrefix(r.URL.Path, "/interview/") {
+		http.ServeFile(w, r, "./static/index.html")
+		return
+	}
+	http.NotFound(w, r)
+}
+
+func handleCreate(w http.ResponseWriter, r *http.Request) {
+	id := generateID()
+	http.Redirect(w, r, "/interview/"+id, http.StatusFound)
+}
+
+func handleCompile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse JSON body
+	var req struct {
+		Code     string `json:"code"`
+		Language string `json:"language"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Default to go if not specified
+	if req.Language == "" {
+		req.Language = "go"
+	}
+
+	if req.Language == "javascript" {
+		// Create temp dir
+		tmpDir, err := os.MkdirTemp("", "js-run-*")
+		if err != nil {
+			http.Error(w, "Failed to create temp dir", http.StatusInternalServerError)
+			log.Printf("Error creating temp dir: %v", err)
+			return
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Write code to index.js
+		if err := os.WriteFile(filepath.Join(tmpDir, "index.js"), []byte(req.Code), 0644); err != nil {
+			http.Error(w, "Failed to write code", http.StatusInternalServerError)
+			log.Printf("Error writing code: %v", err)
+			return
+		}
+
+		// Run node
+		cmd := exec.Command("node", "index.js")
+		cmd.Dir = tmpDir
+		output, err := cmd.CombinedOutput()
+		
+		// For JS, we just return the output, whether it failed or not (runtime errors are output too)
+		// If there was a system error (like node not found), we might want to handle it differently,
+		// but for now, returning output is fine.
+		if err != nil {
+			// Check if it's an execution error or system error
+			if _, ok := err.(*exec.ExitError); !ok {
+				log.Printf("Error running node: %v", err)
+				http.Error(w, "Failed to execute javascript", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write(output)
+		return
+	}
+
+	// Go handling
+	// Create temp dir
+	tmpDir, err := os.MkdirTemp("", "wasm-build-*")
+	if err != nil {
+		http.Error(w, "Failed to create temp dir", http.StatusInternalServerError)
+		log.Printf("Error creating temp dir: %v", err)
+		return
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Write code to main.go
+	if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(req.Code), 0644); err != nil {
+		http.Error(w, "Failed to write code", http.StatusInternalServerError)
+		log.Printf("Error writing code: %v", err)
+		return
+	}
+
+	// Run go build
+	cmd := exec.Command("go", "build", "-o", "main.wasm", "main.go")
+	cmd.Dir = tmpDir
+	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Compilation error
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(output)
+		return
+	}
+
+	// Read wasm file
+	wasmBytes, err := os.ReadFile(filepath.Join(tmpDir, "main.wasm"))
+	if err != nil {
+		http.Error(w, "Failed to read wasm", http.StatusInternalServerError)
+		log.Printf("Error reading wasm: %v", err)
+		return
+	}
+
+	// Send wasm
+	w.Header().Set("Content-Type", "application/wasm")
+	w.Write(wasmBytes)
+}
+
 func main() {
 	hubManager := newHubManager()
 
@@ -56,24 +177,10 @@ func main() {
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	// Root handler - serve index.html
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.ServeFile(w, r, "./static/index.html")
-			return
-		}
-		// Handle /interview/{id}
-		if strings.HasPrefix(r.URL.Path, "/interview/") {
-			http.ServeFile(w, r, "./static/index.html")
-			return
-		}
-		http.NotFound(w, r)
-	})
+	http.HandleFunc("/", handleRoot)
 
 	// Create new interview session
-	http.HandleFunc("/create", func(w http.ResponseWriter, r *http.Request) {
-		id := generateID()
-		http.Redirect(w, r, "/interview/"+id, http.StatusFound)
-	})
+	http.HandleFunc("/create", handleCreate)
 
 	// WebSocket handler
 	http.HandleFunc("/ws/", func(w http.ResponseWriter, r *http.Request) {
@@ -89,62 +196,7 @@ func main() {
 		serveWs(hub, w, r)
 	})
 
-	http.HandleFunc("/compile", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		// Parse JSON body
-		var req struct {
-			Code string `json:"code"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
-			return
-		}
-
-		// Create temp dir
-		tmpDir, err := os.MkdirTemp("", "wasm-build-*")
-		if err != nil {
-			http.Error(w, "Failed to create temp dir", http.StatusInternalServerError)
-			log.Printf("Error creating temp dir: %v", err)
-			return
-		}
-		defer os.RemoveAll(tmpDir)
-
-		// Write code to main.go
-		if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(req.Code), 0644); err != nil {
-			http.Error(w, "Failed to write code", http.StatusInternalServerError)
-			log.Printf("Error writing code: %v", err)
-			return
-		}
-
-		// Run go build
-		cmd := exec.Command("go", "build", "-o", "main.wasm", "main.go")
-		cmd.Dir = tmpDir
-		cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			// Compilation error
-			w.Header().Set("Content-Type", "text/plain")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write(output)
-			return
-		}
-
-		// Read wasm file
-		wasmBytes, err := os.ReadFile(filepath.Join(tmpDir, "main.wasm"))
-		if err != nil {
-			http.Error(w, "Failed to read wasm", http.StatusInternalServerError)
-			log.Printf("Error reading wasm: %v", err)
-			return
-		}
-
-		// Send wasm
-		w.Header().Set("Content-Type", "application/wasm")
-		w.Write(wasmBytes)
-	})
+	http.HandleFunc("/compile", handleCompile)
 
 	log.Println("Server started on :8080")
 	err := http.ListenAndServe(":8080", nil)
