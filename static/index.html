@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview Platform</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="stylesheet" href="/style.css">
+    <!-- CodeMirror CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Interview Platform</h1>
+        </header>
+        <main>
+            <h1>Online Coding Interview</h1>
+
+            <div id="landing-page" style="display: none; text-align: center; margin-top: 50px;">
+                <p>Welcome! Click the button below to start a new interview session.</p>
+                <a href="/create" class="button"
+                    style="padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; font-size: 16px;">Create
+                    New Interview</a>
+            </div>
+
+            <div id="interview-page" style="display: none;">
+                <div id="editor-container">
+                    <textarea id="code-editor">// Write your code here...</textarea>
+                </div>
+                <div id="controls">
+                    <button id="run-btn">Run Code</button>
+                </div>
+                <div id="output-container">
+                    <h3>Output:</h3>
+                    <pre id="output"></pre>
+                </div>
+            </div>
+    </div>
+
+    <!-- CodeMirror JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/go/go.min.js"></script>
+
+    <!-- App JS -->
+    <script src="/static/js/app.js"></script>
+    <script>
+        // Simple routing logic
+        if (window.location.pathname === '/' || window.location.pathname === '/index.html') {
+            document.getElementById('landing-page').style.display = 'block';
+        } else {
+            document.getElementById('interview-page').style.display = 'block';
+            // Refresh editor to ensure it renders correctly after being unhidden
+            setTimeout(function () {
+                if (window.editor) window.editor.refresh();
+            }, 10);
+        }
+    </script>
+</body>
+
+</html>
