@@ -3,11 +3,13 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"encoding/hex"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 // HubManager manages active hubs for different interview sessions
@@ -90,9 +92,33 @@ func main() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		// In a real app, we would save to a temp file and run 'go run' in a sandbox.
-		// For bootstrap, we just simulate success.
-		w.Write([]byte("Building...\nRunning...\n\nProgram exited successfully.\nOutput:\nHello, World! (Simulated)"))
+		
+		// Parse JSON body
+		var req struct {
+			Code     string `json:"code"`
+			Language string `json:"language"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Simulate execution
+		time.Sleep(1 * time.Second) // Simulate build/run time
+
+		var output string
+		switch req.Language {
+		case "go":
+			output = "Building...\nRunning...\n\nProgram exited successfully.\nOutput:\nHello, World! (from Go)"
+		case "javascript":
+			output = "Running...\n\nOutput:\nHello, World! (from JavaScript)"
+		case "python":
+			output = "Running...\n\nOutput:\nHello, World! (from Python)"
+		default:
+			output = "Unknown language"
+		}
+
+		w.Write([]byte(output))
 	})
 
 	log.Println("Server started on :8080")

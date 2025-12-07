@@ -32,6 +32,15 @@
                     <textarea id="code-editor">// Write your code here...</textarea>
                 </div>
                 <div id="controls">
+                    <select id="theme-select" style="margin-right: 10px; padding: 5px;">
+                        <option value="light">Light Theme</option>
+                        <option value="dark">Dark Theme</option>
+                    </select>
+                    <select id="language-select" style="margin-right: 10px; padding: 5px;">
+                        <option value="go">Go</option>
+                        <option value="javascript">JavaScript</option>
+                        <option value="python">Python</option>
+                    </select>
                     <button id="run-btn">Run Code</button>
                 </div>
                 <div id="output-container">
@@ -44,6 +53,8 @@
     <!-- CodeMirror JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/go/go.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
 
     <!-- App JS -->
     <script src="/static/js/app.js"></script>

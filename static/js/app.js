@@ -5,7 +5,35 @@ var editor = CodeMirror.fromTextArea(document.getElementById("code-editor"), {
     theme: "monokai"
 });
 
-// WebSocket connection
+// Language switching
+var languageSelect = document.getElementById('language-select');
+languageSelect.addEventListener('change', function () {
+    var mode = languageSelect.value;
+    if (mode === 'go') {
+        editor.setOption('mode', 'go');
+        editor.setValue('// Write your Go code here...\npackage main\n\nimport "fmt"\n\nfunc main() {\n\tfmt.Println("Hello, World!")\n}');
+    } else if (mode === 'javascript') {
+        editor.setOption('mode', 'javascript');
+        editor.setValue('// Write your JavaScript code here...\nconsole.log("Hello, World!");');
+    } else if (mode === 'python') {
+        editor.setOption('mode', 'python');
+        editor.setValue('# Write your Python code here...\nprint("Hello, World!")');
+    }
+});
+
+// Theme switching
+var themeSelect = document.getElementById('theme-select');
+themeSelect.addEventListener('change', function () {
+    var theme = themeSelect.value;
+    if (theme === 'dark') {
+        document.body.classList.add('theme-dark');
+        editor.setOption('theme', 'monokai'); // Keep monokai for dark
+    } else {
+        document.body.classList.remove('theme-dark');
+        editor.setOption('theme', 'default'); // Use default for light
+    }
+});
+
 // WebSocket connection
 var pathParts = window.location.pathname.split('/');
 var interviewId = pathParts[pathParts.length - 1];
@@ -57,3 +85,28 @@ if (window.location.pathname === '/' || window.location.pathname === '/index.htm
         }
     });
 }
+
+// Run code
+document.getElementById('run-btn').addEventListener('click', function () {
+    var code = editor.getValue();
+    var language = languageSelect.value;
+
+    fetch('/run', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            code: code,
+            language: language
+        })
+    })
+        .then(response => response.text())
+        .then(data => {
+            document.getElementById('output').textContent = data;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('output').textContent = 'Error running code';
+        });
+});
