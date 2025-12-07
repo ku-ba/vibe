@@ -7,9 +7,11 @@ import (
 	"encoding/hex"
 	"log"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 )
 
 // HubManager manages active hubs for different interview sessions
@@ -87,38 +89,61 @@ func main() {
 		serveWs(hub, w, r)
 	})
 
-	http.HandleFunc("/run", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/compile", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		
+
 		// Parse JSON body
 		var req struct {
-			Code     string `json:"code"`
-			Language string `json:"language"`
+			Code string `json:"code"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
 
-		// Simulate execution
-		time.Sleep(1 * time.Second) // Simulate build/run time
+		// Create temp dir
+		tmpDir, err := os.MkdirTemp("", "wasm-build-*")
+		if err != nil {
+			http.Error(w, "Failed to create temp dir", http.StatusInternalServerError)
+			log.Printf("Error creating temp dir: %v", err)
+			return
+		}
+		defer os.RemoveAll(tmpDir)
 
-		var output string
-		switch req.Language {
-		case "go":
-			output = "Building...\nRunning...\n\nProgram exited successfully.\nOutput:\nHello, World! (from Go)"
-		case "javascript":
-			output = "Running...\n\nOutput:\nHello, World! (from JavaScript)"
-		case "python":
-			output = "Running...\n\nOutput:\nHello, World! (from Python)"
-		default:
-			output = "Unknown language"
+		// Write code to main.go
+		if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(req.Code), 0644); err != nil {
+			http.Error(w, "Failed to write code", http.StatusInternalServerError)
+			log.Printf("Error writing code: %v", err)
+			return
 		}
 
-		w.Write([]byte(output))
+		// Run go build
+		cmd := exec.Command("go", "build", "-o", "main.wasm", "main.go")
+		cmd.Dir = tmpDir
+		cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			// Compilation error
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write(output)
+			return
+		}
+
+		// Read wasm file
+		wasmBytes, err := os.ReadFile(filepath.Join(tmpDir, "main.wasm"))
+		if err != nil {
+			http.Error(w, "Failed to read wasm", http.StatusInternalServerError)
+			log.Printf("Error reading wasm: %v", err)
+			return
+		}
+
+		// Send wasm
+		w.Header().Set("Content-Type", "application/wasm")
+		w.Write(wasmBytes)
 	})
 
 	log.Println("Server started on :8080")

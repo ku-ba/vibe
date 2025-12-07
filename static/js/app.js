@@ -87,26 +87,109 @@ if (window.location.pathname === '/' || window.location.pathname === '/index.htm
 }
 
 // Run code
-document.getElementById('run-btn').addEventListener('click', function () {
+// Run code
+document.getElementById('run-btn').addEventListener('click', async function () {
     var code = editor.getValue();
     var language = languageSelect.value;
+    var outputElement = document.getElementById('output');
 
-    fetch('/run', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            code: code,
-            language: language
-        })
-    })
-        .then(response => response.text())
-        .then(data => {
-            document.getElementById('output').textContent = data;
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            document.getElementById('output').textContent = 'Error running code';
+    outputElement.textContent = "Running...";
+
+    // Helper to capture console output
+    function captureConsole(callback) {
+        let output = "";
+        const originalLog = console.log;
+        const originalError = console.error;
+
+        console.log = function (...args) {
+            output += args.join(" ") + "\n";
+            // originalLog.apply(console, args);
+        };
+        console.error = function (...args) {
+            output += "Error: " + args.join(" ") + "\n";
+            // originalError.apply(console, args);
+        };
+
+        try {
+            callback();
+        } catch (e) {
+            output += "Error: " + e.message + "\n";
+        } finally {
+            console.log = originalLog;
+            console.error = originalError;
+        }
+        return output;
+    }
+
+    if (language === 'go') {
+        outputElement.textContent = "Compiling and running Go...";
+        try {
+            const response = await fetch('/compile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                outputElement.textContent = "Compilation Error:\n" + errorText;
+                return;
+            }
+
+            const wasmBuffer = await response.arrayBuffer();
+            const go = new Go();
+
+            let output = "";
+            const originalLog = console.log;
+            const originalError = console.error;
+
+            console.log = function (...args) { output += args.join(" ") + "\n"; };
+            console.error = function (...args) { output += "Error: " + args.join(" ") + "\n"; };
+
+            const result = await WebAssembly.instantiate(wasmBuffer, go.importObject);
+            outputElement.textContent = "Running Go...";
+            await go.run(result.instance);
+
+            console.log = originalLog;
+            console.error = originalError;
+            outputElement.textContent = output || "Program finished with no output.";
+
+        } catch (error) {
+            outputElement.textContent = 'Error running Go: ' + error.message;
+        }
+
+    } else if (language === 'javascript') {
+        let output = captureConsole(() => {
+            // Use new Function to execute in global scope but safer than eval
+            new Function(code)();
         });
+        outputElement.textContent = output || "Program finished with no output.";
+
+    } else if (language === 'python') {
+        outputElement.textContent = "Loading Python environment...";
+        if (!window.pyodide) {
+            try {
+                window.pyodide = await loadPyodide();
+            } catch (e) {
+                outputElement.textContent = "Failed to load Pyodide: " + e.message;
+                return;
+            }
+        }
+
+        outputElement.textContent = "Running Python...";
+        try {
+            // Redirect stdout/stderr
+            window.pyodide.setStdout({ batched: (msg) => outputElement.textContent += msg + "\n" });
+            window.pyodide.setStderr({ batched: (msg) => outputElement.textContent += "Error: " + msg + "\n" });
+
+            outputElement.textContent = ""; // Clear "Running..." message
+            await window.pyodide.runPythonAsync(code);
+
+            if (outputElement.textContent === "") {
+                outputElement.textContent = "Program finished with no output.";
+            }
+        } catch (e) {
+            outputElement.textContent += "Error: " + e.message;
+        }
+    }
 });
