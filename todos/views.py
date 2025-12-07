@@ -6,7 +6,7 @@ from .forms import TodoForm
 
 class TodoListView(ListView):
     model = Todo
-    template_name = 'todos/todo_list.html'
+    template_name = 'home.html'
     context_object_name = 'todos'
     ordering = ['is_resolved', 'due_date']
 
